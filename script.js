@@ -1,10 +1,12 @@
+
+
 // ... (vorherige JavaScript-Funktionen: displayLeaderboard, showLevelTimes, formatTime, startTimer, stopTimer, etc.) ...
 
 const originalModeButton = document.getElementById("originalMode");
 const showdownModeButton = document.getElementById("showdownMode");
 const modeSelect = document.getElementById("modeSelect");
+
 let gameMode = "original"; // Standardmäßig "original" Modus
-let currentUsers = []; // Array zum Speichern der aktuellen Benutzer
 
 originalModeButton.addEventListener("click", () => {
     gameMode = "original";
@@ -95,6 +97,7 @@ function resetGame() {
     level2Button.style.display = "none";
     level3Button.style.display = "none";
     level4Button.style.display = "none";
+    level5Button.style.display = "none";
     restartLevel1Button.style.display = "none";
     canvas.style.backgroundColor = "#ddd";
     jakobSpeedMultiplier = 1;
@@ -345,6 +348,14 @@ function displayLevels() {
 
 // ... (Rest des Spielcodes)
 
+const PINK_ORB_COLOR = "pink"; // [NEU] Farbe für den pinken Orb
+let pinkOrb = null; // [NEU] Variable, um den pinken Orb zu speichern
+let pinkOrbCollected = false; // [NEU]  Variable, um zu überprüfen, ob der pinke Orb eingesammelt wurde
+let hochstrasserInvincible = true; // [NEU] Variable, um Hochstrassers Unverwundbarkeit zu steuern
+let hochstrasserInvincibleTimer = 0; // [NEU] Timer für Hochstrassers Unverwundbarkeit
+const HOCHSTRASSER_INVINCIBLE_DURATION = 40000; // [NEU] Dauer der Unverwundbarkeit in Millisekunden (40 Sekunden)
+const HOCHSTRASSER_GROWTH_RATE = 0.1; // [NEU] Wachstumsrate von Hochstrasser
+
 // Level-Speicherfunktion aktualisieren
 function saveLevelProgress() {
     if (currentUser) {
@@ -571,6 +582,107 @@ function resetGame() {
     }
 
     createOrbs();
+}
+
+// Angepasste Bewegung von Jakob:
+let newJakobX = jakobX;
+let newJakobY = jakobY;
+if (keys["w"]) {
+    const currentTime = Date.now();
+    if (currentTime - lastWPressTime < 200 && currentTime - lastDashTime > dashCooldown) { // Doppelklick-Zeitfenster: 200 Millisekunden
+        dashActive = true;
+        dashStartTime = currentTime;
+        jakobSpeedMultiplier = 1.4; // Geschwindigkeitsboost: +0.4x
+        newJakobY -= jakobSpeed * 2; // Kleiner Katapulteffekt
+        lastDashTime = currentTime;
+    }
+    lastWPressTime = currentTime;
+    newJakobY -= jakobSpeed * jakobSpeedMultiplier;
+}
+if (keys["s"]) newJakobY += jakobSpeed * jakobSpeedMultiplier;
+if (keys["a"]) newJakobX -= jakobSpeed * jakobSpeedMultiplier;
+if (keys["d"]) newJakobX += jakobSpeed * jakobSpeedMultiplier;
+
+if (dashActive && Date.now() - dashStartTime > dashDuration) {
+    dashActive = false;
+    jakobSpeedMultiplier = 1; // Geschwindigkeit auf Normal zurücksetzen
+}
+
+let jakobCollides = false;
+if (level === 3 || level === 4) {
+    obstacles.forEach((obstacle) => {
+        if (newJakobX + jakobRadius > obstacle.x &&
+            newJakobX - jakobRadius < obstacle.x + obstacle.width &&
+            newJakobY + jakobRadius > obstacle.y &&
+            newJakobY - jakobRadius < obstacle.y + obstacle.height) {
+            jakobCollides = true;
+        }
+    });
+}
+
+if (!jakobCollides) {
+    // Stelle sicher, dass Jakob innerhalb der Grenzen bleibt
+    newJakobX = Math.max(jakobRadius, Math.min(newJakobX, canvas.width - jakobRadius));
+    newJakobY = Math.max(jakobRadius, Math.min(newJakobY, canvas.height - jakobRadius));
+    jakobX = newJakobX;
+    jakobY = newJakobY;
+}
+
+// Angepasste Bewegung von Hochstrasser:
+hochstrasserX += hochstrasserDirectionX * hochstrasserSpeed;
+hochstrasserY += hochstrasserDirectionY * hochstrasserSpeed;
+
+let hochstrasserCollides = false;
+let collisionSide = null; // Speichert die Kollisionsseite (top, bottom, left, right)
+
+if (level === 3 || level === 4) {
+    obstacles.forEach((obstacle) => {
+        if (hochstrasserX + hochstrasserRadius > obstacle.x &&
+            hochstrasserX - hochstrasserRadius < obstacle.x + obstacle.width &&
+            hochstrasserY + hochstrasserRadius > obstacle.y &&
+            hochstrasserY - hochstrasserRadius < obstacle.y + obstacle.height) {
+            hochstrasserCollides = true;
+
+            // Bestimme die Kollisionsseite
+            const dx = hochstrasserX - (obstacle.x + obstacle.width / 2);
+            const dy = hochstrasserY - (obstacle.y + obstacle.height / 2);
+            const width = (obstacle.width + hochstrasserRadius) / 2;
+            const height = (obstacle.height + hochstrasserRadius) / 2;
+            const crossWidth = width * dy;
+            const crossHeight = height * dx;
+
+            if (Math.abs(dx) <= width && Math.abs(dy) <= height) {
+                if (crossWidth > crossHeight) {
+                    collisionSide = (crossWidth > -crossHeight) ? "bottom" : "left";
+                } else {
+                    collisionSide = (crossWidth > -crossHeight) ? "right" : "top";
+                }
+            }
+        }
+    });
+}
+
+if (hochstrasserCollides) {
+    // Hochstrasser prallt ab, basierend auf der Kollisionsseite
+    if (collisionSide === "left" || collisionSide === "right") {
+        hochstrasserDirectionX *= -1;
+    }
+    if (collisionSide === "top" || collisionSide === "bottom") {
+        hochstrasserDirectionY *= -1;
+    }
+} else 
+    // Stelle sicher, dass Hochstrasser innerhalb der Grenzen bleibt
+    hochstrasserX = Math.max(hochstrasserRadius, Math.min(hochstrasserX, canvas.width - hochstrasserRadius));
+    hochstrasserY = Math.max(hochstrasserRadius, Math.min(hochstrasserY, canvas.height - hochstrasserRadius));
+    hochstrasserX += hochstrasserDirectionX * hochstrasserSpeed;
+    hochstrasserY += hochstrasserDirectionY * hochstrasserSpeed;
+
+
+if (hochstrasserX < 0 || hochstrasserX > canvas.width) {
+    hochstrasserDirectionX *= -1;
+}
+if (hochstrasserY < 0 || hochstrasserY > canvas.height) {
+    hochstrasserDirectionY *= -1;
 }
 
 function createOrbs() {
